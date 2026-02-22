@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import "../App.css";
 
+const API_URL = "https://delhi-transit-analysis-system.onrender.com";
+
 export default function StationSelector() {
   const [mode, setMode] = useState("metro");
   const [stations, setStations] = useState([]);
@@ -10,11 +12,11 @@ export default function StationSelector() {
   const [loadingStations, setLoadingStations] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Fetch stations (ONLY once on load)
+  // Fetch stations on load
   useEffect(() => {
     setLoadingStations(true);
 
-    fetch("http://localhost:5000/stations")
+    fetch(`${API_URL}/stations?mode=${mode}`)
       .then((res) => res.json())
       .then((data) => {
         setStations(data.stations || []);
@@ -24,7 +26,7 @@ export default function StationSelector() {
         console.error("Error fetching stations:", err);
         setLoadingStations(false);
       });
-  }, []); // 👈 IMPORTANT: empty dependency
+  }, [mode]);
 
   // Calculate route
   const handleCalculate = () => {
@@ -36,7 +38,7 @@ export default function StationSelector() {
     setErrorMessage("");
 
     fetch(
-      `http://localhost:5000/route?start=${encodeURIComponent(
+      `${API_URL}/route?mode=${mode}&start=${encodeURIComponent(
         start
       )}&end=${encodeURIComponent(end)}`
     )
@@ -44,7 +46,9 @@ export default function StationSelector() {
       .then((data) => {
         setRouteInfo(data);
       })
-      .catch((err) => console.error("Route error:", err));
+      .catch((err) => {
+        console.error("Route error:", err);
+      });
   };
 
   return (
