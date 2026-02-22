@@ -1,5 +1,7 @@
-FRONTEND LINK - https://delhi-transit-analysis-system-frontend.onrender.com/
-BACKEND LINK - https://delhi-transit-analysis-system-backend.onrender.com/
+Frontend:
+https://delhi-transit-analysis-system-1.onrender.com/
+Backend:
+https://delhi-transit-analysis-system.onrender.com/
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
