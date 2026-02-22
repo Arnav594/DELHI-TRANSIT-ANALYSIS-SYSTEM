@@ -10,22 +10,21 @@ export default function StationSelector() {
   const [loadingStations, setLoadingStations] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Fetch stations
-useEffect(() => {
-  setLoadingStations(true);
+  // Fetch stations (ONLY once on load)
+  useEffect(() => {
+    setLoadingStations(true);
 
-  fetch(`http://localhost:5000/stations?mode=${mode}`)
-    .then(res => res.json())
-    .then(data => {
-      setStations(data.stations || []);
-      setLoadingStations(false);
-    })
-    .catch(err => {
-      console.error("Error fetching stations:", err);
-      setLoadingStations(false);
-    });
-
-}, [mode]);
+    fetch("http://localhost:5000/stations")
+      .then((res) => res.json())
+      .then((data) => {
+        setStations(data.stations || []);
+        setLoadingStations(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching stations:", err);
+        setLoadingStations(false);
+      });
+  }, []); // 👈 IMPORTANT: empty dependency
 
   // Calculate route
   const handleCalculate = () => {
@@ -41,12 +40,11 @@ useEffect(() => {
         start
       )}&end=${encodeURIComponent(end)}`
     )
-      .then(res => res.json())
-      .then(data => {
-        console.log("Route API response:", data);
+      .then((res) => res.json())
+      .then((data) => {
         setRouteInfo(data);
       })
-      .catch(err => console.error("Route error:", err));
+      .catch((err) => console.error("Route error:", err));
   };
 
   return (
@@ -55,7 +53,15 @@ useEffect(() => {
 
       {/* Mode */}
       <div className="mode-dropdown">
-        <select value={mode} onChange={(e) => setMode(e.target.value)}>
+        <select
+          value={mode}
+          onChange={(e) => {
+            setMode(e.target.value);
+            setStart("");
+            setEnd("");
+            setRouteInfo(null);
+          }}
+        >
           <option value="metro">Metro</option>
         </select>
       </div>
@@ -67,9 +73,9 @@ useEffect(() => {
           {loadingStations ? (
             <option>Loading...</option>
           ) : (
-            stations.map((s, index) => (
-              <option key={s + index} value={s}>
-                {s}
+            stations.map((station, index) => (
+              <option key={index} value={station}>
+                {station}
               </option>
             ))
           )}
@@ -80,9 +86,9 @@ useEffect(() => {
           {loadingStations ? (
             <option>Loading...</option>
           ) : (
-            stations.map((s, index) => (
-              <option key={s + index + "end"} value={s}>
-                {s}
+            stations.map((station, index) => (
+              <option key={index + "-end"} value={station}>
+                {station}
               </option>
             ))
           )}
@@ -101,14 +107,17 @@ useEffect(() => {
           <p><strong>Start:</strong> {routeInfo.start}</p>
           <p><strong>End:</strong> {routeInfo.end}</p>
           <p><strong>Stops:</strong> {routeInfo.stops}</p>
-          <p><strong>Estimated Time:</strong> {routeInfo.approx_time_minutes} mins</p>
+          <p>
+            <strong>Estimated Time:</strong>{" "}
+            {routeInfo.approx_time_minutes} mins
+          </p>
 
           <hr />
 
           <h3>Route:</h3>
           <ol>
             {routeInfo.route.map((station, index) => (
-              <li key={station + index}>{station}</li>
+              <li key={index}>{station}</li>
             ))}
           </ol>
         </div>
