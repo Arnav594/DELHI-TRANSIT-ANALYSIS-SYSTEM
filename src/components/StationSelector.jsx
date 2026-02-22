@@ -10,24 +10,22 @@ export default function StationSelector() {
   const [loadingStations, setLoadingStations] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Fetch stations whenever mode changes
-  useEffect(() => {
-    setLoadingStations(true);
-    setStart("");
-    setEnd("");
-    setRouteInfo(null);
+  // Fetch stations
+useEffect(() => {
+  setLoadingStations(true);
 
-    fetch(`http://localhost:5000/stations?mode=${mode}`)
-      .then(res => res.json())
-      .then(data => {
-        setStations(data.stations || []);
-        setLoadingStations(false);
-      })
-      .catch(err => {
-        console.error("Error fetching stations:", err);
-        setLoadingStations(false);
-      });
-  }, [mode]);
+  fetch(`http://localhost:5000/stations?mode=${mode}`)
+    .then(res => res.json())
+    .then(data => {
+      setStations(data.stations || []);
+      setLoadingStations(false);
+    })
+    .catch(err => {
+      console.error("Error fetching stations:", err);
+      setLoadingStations(false);
+    });
+
+}, [mode]);
 
   // Calculate route
   const handleCalculate = () => {
@@ -38,9 +36,16 @@ export default function StationSelector() {
 
     setErrorMessage("");
 
-    fetch(`http://localhost:5000/route?mode=${mode}&start=${start}&end=${end}`)
+    fetch(
+      `http://localhost:5000/route?start=${encodeURIComponent(
+        start
+      )}&end=${encodeURIComponent(end)}`
+    )
       .then(res => res.json())
-      .then(data => setRouteInfo(data))
+      .then(data => {
+        console.log("Route API response:", data);
+        setRouteInfo(data);
+      })
       .catch(err => console.error("Route error:", err));
   };
 
@@ -48,23 +53,24 @@ export default function StationSelector() {
     <div className="selector-container">
       <h1>Delhi Transit Route Finder</h1>
 
-      {/* Mode Dropdown */}
+      {/* Mode */}
       <div className="mode-dropdown">
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
           <option value="metro">Metro</option>
-          <option value="bus">Bus</option>
         </select>
       </div>
 
-      {/* Station Dropdowns */}
+      {/* Dropdowns */}
       <div className="dropdowns">
         <select value={start} onChange={(e) => setStart(e.target.value)}>
           <option value="">Select Start</option>
           {loadingStations ? (
             <option>Loading...</option>
           ) : (
-            stations.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            stations.map((s, index) => (
+              <option key={s + index} value={s}>
+                {s}
+              </option>
             ))
           )}
         </select>
@@ -74,26 +80,37 @@ export default function StationSelector() {
           {loadingStations ? (
             <option>Loading...</option>
           ) : (
-            stations.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            stations.map((s, index) => (
+              <option key={s + index + "end"} value={s}>
+                {s}
+              </option>
             ))
           )}
         </select>
       </div>
 
-      {errorMessage && (
-        <p className="error-text">{errorMessage}</p>
-      )}
+      {errorMessage && <p className="error-text">{errorMessage}</p>}
 
       <button className="calculate-btn" onClick={handleCalculate}>
         Calculate Route
       </button>
 
-      {routeInfo && (
+      {/* Result */}
+      {routeInfo && routeInfo.route && (
         <div className="result-box">
-          <p><strong>Mode:</strong> {routeInfo.mode.toUpperCase()}</p>
+          <p><strong>Start:</strong> {routeInfo.start}</p>
+          <p><strong>End:</strong> {routeInfo.end}</p>
           <p><strong>Stops:</strong> {routeInfo.stops}</p>
           <p><strong>Estimated Time:</strong> {routeInfo.approx_time_minutes} mins</p>
+
+          <hr />
+
+          <h3>Route:</h3>
+          <ol>
+            {routeInfo.route.map((station, index) => (
+              <li key={station + index}>{station}</li>
+            ))}
+          </ol>
         </div>
       )}
     </div>
