@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = "https://delhi-transit-analysis-system.onrender.com";
 
 export const fetchStations = async (mode) => {
   const res = await fetch(`${API_URL}/stations?mode=${mode}`);
