@@ -52,7 +52,7 @@ export default function StationSelector() {
   };
 
   return (
-    <div className="selector-container">
+    <div className="station-container">
       <h1>Delhi Transit Route Finder</h1>
 
       {/* Mode */}
