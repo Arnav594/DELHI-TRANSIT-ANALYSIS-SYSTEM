@@ -2,13 +2,18 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from db import get_connection
-from collections import deque
+from collections import defaultdict
+import heapq
 import os
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Time configuration
+STATION_TIME = 2          # minutes between consecutive stations
+INTERCHANGE_TIME = 7      # penalty for changing lines
 
 
 # -----------------------------
@@ -27,30 +32,36 @@ def build_metro_graph():
 
     graph = {}
 
-    cur.execute("SELECT DISTINCT metro_line FROM delhi_metro_stations;")
-    lines = [row[0] for row in cur.fetchall()]
+    cur.execute("""
+        SELECT station_id, station_name, metro_line
+        FROM delhi_metro_stations
+        ORDER BY metro_line, station_id;
+    """)
 
-    for line in lines:
-        cur.execute("""
-            SELECT station_id, station_name
-            FROM delhi_metro_stations
-            WHERE metro_line = %s
-            ORDER BY station_id;
-        """, (line,))
+    rows = cur.fetchall()
 
-        stations = cur.fetchall()
+    # 1️⃣ Connect consecutive stations on same line
+    for i in range(len(rows) - 1):
+        _, current_name, current_line = rows[i]
+        _, next_name, next_line = rows[i + 1]
 
-        for i in range(len(stations) - 1):
-            current = clean_station_name(stations[i][1])
-            next_station = clean_station_name(stations[i + 1][1])
+        if current_line == next_line:
+            graph.setdefault(current_name, []).append((next_name, current_line))
+            graph.setdefault(next_name, []).append((current_name, current_line))
 
-            if current not in graph:
-                graph[current] = []
-            if next_station not in graph:
-                graph[next_station] = []
+    # 2️⃣ Connect interchange stations (same cleaned name)
+    station_groups = defaultdict(list)
 
-            graph[current].append(next_station)
-            graph[next_station].append(current)
+    for station in graph.keys():
+        cleaned = clean_station_name(station)
+        station_groups[cleaned].append(station)
+
+    for group in station_groups.values():
+        if len(group) > 1:
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
+                    graph[group[i]].append((group[j], "INTERCHANGE"))
+                    graph[group[j]].append((group[i], "INTERCHANGE"))
 
     cur.close()
     conn.close()
@@ -59,25 +70,63 @@ def build_metro_graph():
 
 
 # -----------------------------
-# Shortest Path (BFS)
+# Dijkstra: Minimize Total Time
 # -----------------------------
-def shortest_path(graph, start, end):
-    queue = deque([(start, [start])])
-    visited = set()
+def shortest_path(graph, start_clean, end_clean):
+    pq = []
+    visited = {}
 
-    while queue:
-        current, path = queue.popleft()
+    # Find backend nodes matching cleaned names
+    start_nodes = [
+        node for node in graph
+        if clean_station_name(node) == start_clean
+    ]
 
-        if current == end:
-            return path
+    end_nodes = [
+        node for node in graph
+        if clean_station_name(node) == end_clean
+    ]
 
-        visited.add(current)
+    # Initialize priority queue
+    for node in start_nodes:
+        heapq.heappush(pq, (0, node, None, [node], 0))
+        # (total_time, current_node, prev_line, path, interchanges)
 
-        for neighbor in graph.get(current, []):
-            if neighbor not in visited:
-                queue.append((neighbor, path + [neighbor]))
+    while pq:
+        total_time, current, prev_line, path, interchanges = heapq.heappop(pq)
 
-    return None
+        state = (current, prev_line)
+
+        # Skip if already visited with better time
+        if state in visited and visited[state] <= total_time:
+            continue
+
+        visited[state] = total_time
+
+        if current in end_nodes:
+            return path, total_time, interchanges
+
+        for neighbor, line in graph.get(current, []):
+            new_time = total_time + STATION_TIME
+            new_interchanges = interchanges
+
+            # Add interchange penalty
+            if prev_line and prev_line != line and line != "INTERCHANGE":
+                new_time += INTERCHANGE_TIME
+                new_interchanges += 1
+
+            heapq.heappush(
+                pq,
+                (
+                    new_time,
+                    neighbor,
+                    line,
+                    path + [neighbor],
+                    new_interchanges
+                )
+            )
+
+    return None, None, None
 
 
 # -----------------------------
@@ -92,13 +141,12 @@ def get_stations():
         cur.execute("SELECT station_name FROM delhi_metro_stations;")
         raw = [row[0] for row in cur.fetchall()]
 
-        cleaned = [clean_station_name(name) for name in raw]
-        unique = sorted(set(cleaned))
+        cleaned = sorted(set(clean_station_name(n) for n in raw))
 
         cur.close()
         conn.close()
 
-        return jsonify({"stations": unique})
+        return jsonify({"stations": cleaned})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -118,26 +166,33 @@ def get_route():
     try:
         graph = build_metro_graph()
 
-        start = clean_station_name(start)
-        end = clean_station_name(end)
+        start_clean = clean_station_name(start)
+        end_clean = clean_station_name(end)
 
-        if start not in graph or end not in graph:
-            return jsonify({"error": "Station not found"}), 404
-
-        path = shortest_path(graph, start, end)
+        path, total_time, interchanges = shortest_path(
+            graph, start_clean, end_clean
+        )
 
         if not path:
             return jsonify({"error": "No route found"}), 404
 
-        stops = len(path) - 1
-        approx_time = stops * 2
+        # Remove duplicate station names (interchange display fix)
+        cleaned_path = []
+        previous = None
+
+        for station in path:
+            name = clean_station_name(station)
+            if name != previous:
+                cleaned_path.append(name)
+            previous = name
 
         return jsonify({
-            "start": start,
-            "end": end,
-            "route": path,
-            "stops": stops,
-            "approx_time_minutes": approx_time
+            "start": start_clean,
+            "end": end_clean,
+            "route": cleaned_path,
+            "stops": len(cleaned_path) - 1,
+            "interchanges": interchanges,
+            "approx_time_minutes": total_time
         })
 
     except Exception as e:
