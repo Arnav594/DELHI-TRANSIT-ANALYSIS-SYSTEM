@@ -1,112 +1,172 @@
-/* Reset + base styling */
-html, body {
-  height: 100%;
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+/* Force all text to black by default */
+* {
+  color: #000000;
+}
+
+body {
   margin: 0;
-  padding: 0;
-  background: #f5f7fa;
-  font-family: "Poppins", sans-serif;
-  color: #000;
+  background-color: #f0f2f5;
+  font-family: 'Poppins', sans-serif;
 }
 
-/* Make root take full height and center everything */
+
 #root {
-  height: 100vh;
-  width: 100%;
   display: flex;
-  justify-content: center;   /* Center horizontally */
-  align-items: center;        /* Center vertically */
+  justify-content: center;
+  /* FIX: Align to top so dropdowns have space below to open */
+  align-items: flex-start; 
+  min-height: 100vh;
+  width: 100vw;
+  padding-top: 60px;    /* Anchors the card near the top */
+  padding-bottom: 60vh; /* Forces the browser to see space below for the menu */
+  overflow-x: hidden;
 }
 
-/* Card container (your station selector box) */
+/* Container logic for shifting */
+.layout-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 30px;
+  width: 95%;
+  /* Initially small to keep the search card centered */
+  max-width: 400px; 
+  transition: max-width 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Expands to allow the card to shift left and results to fit right */
+.layout-wrapper.active-results {
+  max-width: 1200px;
+}
+
+/* Search Card Styling */
 .station-container {
-  width: 420px;
-  background: #ffffff;
-  padding: 28px;
-  border-radius: 16px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-  text-align: center;
-  overflow: visible;
+  width: 400px;
+  background: white;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  flex-shrink: 0;
 }
 
-/* Heading */
-.station-container h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  font-size: 22px;
+.input-group {
+  text-align: left;
+  margin-bottom: 15px;
+}
+
+.input-group label, .mode-dropdown label {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #333;
+  margin-left: 5px;
+  display: block;
 }
 
-/* Dropdown fields */
 select {
   width: 100%;
   padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #ddd;
-  font-size: 16px;
-  margin-top: 10px;
-  background: #fafafa;
-  outline: none;
-  color: #000;
-}
-
-select:focus {
-  border-color: #007bff;
-}
-
-/* Button */
-button {
-  margin-top: 18px;
-  width: 100%;
-  background: #007bff;
-  color: white;
-  padding: 12px;
-  border: none;
-  border-radius: 10px;
-  font-size: 17px;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+  background: #ffffff;
+  font-size: 1rem;
+  margin-top: 5px;
   cursor: pointer;
-  transition: 0.2s;
 }
 
-button:hover {
-  background: #005fcc;
+.calculate-btn {
+  background: #007bff;
+  color: white !important; /* Keep text white for contrast on blue */
+  border: none;
+  padding: 14px;
+  border-radius: 12px;
+  width: 100%;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
 }
 
-/* Result box */
-.result-box {
-  margin-top: 20px;
+.reset-btn {
+  background: transparent;
+  color: #000000 !important;
+  border: 1px solid #000000;
+  padding: 10px;
+  border-radius: 12px;
+  width: 100%;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+/* Result Card Styling */
+.result-side-container {
+  flex-grow: 1;
+  min-width: 600px;
+  background: white;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideIn 0.6s ease-out;
+}
+
+.stats-row {
+  display: flex;
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  background: #f0f7ff;
   padding: 15px;
-  background: #eef4ff;
-  border-radius: 10px;
+  border-radius: 15px;
+  text-align: center;
+}
+
+.stat-card span {
+  font-size: 0.8rem;
+  display: block;
+  font-weight: 400;
+}
+
+.stat-card strong {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.station-ul {
+  list-style: none;
+  padding: 0;
   text-align: left;
 }
 
-.mode-dropdown {
-  margin-bottom: 20px;
-}
-
-.mode-dropdown select {
-  padding: 10px;
-  width: 200px;
-  border-radius: 8px;
-  border: 1px solid #999;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-/* root layout fix */
-#root {
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 40px;
-}
-
-/* dropdown safety */
-select {
+.station-ul li {
+  padding: 10px 0 10px 25px;
+  border-left: 2px dashed #007bff;
   position: relative;
-  z-index: 1000;
+  font-size: 1rem;
+  font-weight: 400;
 }
 
+.dot {
+  position: absolute;
+  left: -6px;
+  top: 17px;
+  width: 10px;
+  height: 10px;
+  background: #007bff;
+  border-radius: 50%;
+}
+
+.error-text {
+  color: #ff4757;
+  font-size: 0.85rem;
+  margin-top: 5px;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}

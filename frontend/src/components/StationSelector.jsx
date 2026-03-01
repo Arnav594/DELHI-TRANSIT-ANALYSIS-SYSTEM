@@ -15,7 +15,6 @@ export default function StationSelector() {
   // Fetch stations on load
   useEffect(() => {
     setLoadingStations(true);
-
     fetch(`${API_URL}/stations?mode=${mode}`)
       .then((res) => res.json())
       .then((data) => {
@@ -28,102 +27,100 @@ export default function StationSelector() {
       });
   }, [mode]);
 
-  // Calculate route
   const handleCalculate = () => {
     if (!start || !end) {
       setErrorMessage("Please select both start and end stations.");
       return;
     }
-
     setErrorMessage("");
-
     fetch(
-      `${API_URL}/route?mode=${mode}&start=${encodeURIComponent(
-        start
-      )}&end=${encodeURIComponent(end)}`
+      `${API_URL}/route?mode=${mode}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
     )
       .then((res) => res.json())
-      .then((data) => {
-        setRouteInfo(data);
-      })
-      .catch((err) => {
-        console.error("Route error:", err);
-      });
+      .then((data) => setRouteInfo(data))
+      .catch((err) => console.error("Route error:", err));
+  };
+
+  const handleReset = () => {
+    setRouteInfo(null);
+    setStart("");
+    setEnd("");
   };
 
   return (
-    <div className="station-container">
-      <h1>Delhi Transit Route Finder</h1>
+    <div className={`layout-wrapper ${routeInfo ? "active-results" : ""}`}>
+      
+      {/* LEFT SIDE: Search Card */}
+      <div className="station-container">
+        <h2>Delhi Transit</h2>
+        <div className="mode-dropdown">
+          <label className="black-text">Transport Mode</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="metro">Metro</option>
+          </select>
+        </div>
 
-      {/* Mode */}
-      <div className="mode-dropdown">
-        <select
-          value={mode}
-          onChange={(e) => {
-            setMode(e.target.value);
-            setStart("");
-            setEnd("");
-            setRouteInfo(null);
-          }}
-        >
-          <option value="metro">Metro</option>
-        </select>
+        <div className="dropdowns">
+          <div className="input-group">
+            <label className="black-text">From</label>
+            <select value={start} onChange={(e) => setStart(e.target.value)}>
+              <option value="">Select Start</option>
+              {loadingStations ? <option>Loading...</option> : 
+                stations.map((s, i) => <option key={i} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div className="input-group">
+            <label className="black-text">To</label>
+            <select value={end} onChange={(e) => setEnd(e.target.value)}>
+              <option value="">Select End</option>
+              {loadingStations ? <option>Loading...</option> : 
+                stations.map((s, i) => <option key={i + "-end"} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {errorMessage && <p className="error-text">{errorMessage}</p>}
+
+        <button className="calculate-btn" onClick={handleCalculate}>
+          Calculate Route
+        </button>
+        
+        {routeInfo && (
+          <button className="reset-btn" onClick={handleReset}>
+            Clear Search
+          </button>
+        )}
       </div>
 
-      {/* Dropdowns */}
-      <div className="dropdowns">
-        <select value={start} onChange={(e) => setStart(e.target.value)}>
-          <option value="">Select Start</option>
-          {loadingStations ? (
-            <option>Loading...</option>
-          ) : (
-            stations.map((station, index) => (
-              <option key={index} value={station}>
-                {station}
-              </option>
-            ))
-          )}
-        </select>
-
-        <select value={end} onChange={(e) => setEnd(e.target.value)}>
-          <option value="">Select End</option>
-          {loadingStations ? (
-            <option>Loading...</option>
-          ) : (
-            stations.map((station, index) => (
-              <option key={index + "-end"} value={station}>
-                {station}
-              </option>
-            ))
-          )}
-        </select>
-      </div>
-
-      {errorMessage && <p className="error-text">{errorMessage}</p>}
-
-      <button className="calculate-btn" onClick={handleCalculate}>
-        Calculate Route
-      </button>
-
-      {/* Result */}
+      {/* RIGHT SIDE: Results Card */}
       {routeInfo && routeInfo.route && (
-        <div className="result-box">
-          <p><strong>Start:</strong> {routeInfo.start}</p>
-          <p><strong>End:</strong> {routeInfo.end}</p>
-          <p><strong>Stops:</strong> {routeInfo.stops}</p>
-          <p>
-            <strong>Estimated Time:</strong>{" "}
-            {routeInfo.approx_time_minutes} mins
-          </p>
-
-          <hr />
-
-          <h3>Route:</h3>
-          <ol>
-            {routeInfo.route.map((station, index) => (
-              <li key={index}>{station}</li>
-            ))}
-          </ol>
+        <div className="result-side-container">
+          <div className="result-header">
+            <h3>Route Details</h3>
+            <div className="stats-row">
+              <div className="stat-card">
+                <span>Stops</span>
+                <strong>{routeInfo.stops}</strong>
+              </div>
+              <div className="stat-card">
+                <span>Time</span>
+                <strong>{routeInfo.approx_time_minutes} min</strong>
+              </div>
+            </div>
+          </div>
+          
+          <div className="route-path">
+            <h4>Stations List</h4>
+            <ul className="station-ul">
+              {routeInfo.route.map((station, index) => (
+                <li key={index}>
+                  <span className="dot"></span>
+                  {station}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
     </div>
