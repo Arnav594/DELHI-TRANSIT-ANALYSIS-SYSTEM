@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "../App.css";
 
-const API_URL = "https://delhi-transit-analysis-system.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function StationSelector() {
   const [mode, setMode] = useState("metro");
