@@ -1,11 +1,6 @@
 /**
  * API client for the Delhi Metro backend (Flask).
- *
- * Configure the base URL via VITE_API_BASE in .env files:
- *   .env.development → VITE_API_BASE=http://localhost:5000
- *   .env.production  → VITE_API_BASE=https://delhi-transit-analysis-system.onrender.com
- *
- * Falls back to the deployed Render URL if not set.
+ * Running locally: http://localhost:5000
  */
 const API_BASE = "http://localhost:5000";
 
@@ -14,16 +9,20 @@ export interface StationsResponse {
   error?: string;
 }
 
+export interface RouteStation {
+  name: string;
+  line: string;
+  is_interchange: boolean;
+}
+
 export interface RouteResponse {
   start?: string;
   end?: string;
-  route?: {
-    name: string;
-    line: string;
-  }[];
+  route?: RouteStation[];
   stops?: number;
   interchanges?: number;
   approx_time_minutes?: number;
+  route_type?: string;
   error?: string;
 }
 
@@ -44,29 +43,18 @@ async function asJson<T>(res: Response): Promise<T> {
   return data;
 }
 
-/**
- * GET /stations  →  { stations: string[] }
- * The backend ignores `mode` (always metro), but we keep the signature
- * so the existing components don't need to change.
- */
-export async function fetchStations(_mode: string = "metro"): Promise<string[]> {
+export async function fetchStations(): Promise<string[]> {
   const res = await fetch(`${API_BASE}/stations`);
   const data = await asJson<StationsResponse>(res);
   return data.stations ?? [];
 }
 
-/**
- * GET /route?start=...&end=...
- * Returns the full route, stop count, interchange count and ETA.
- */
 export async function fetchRoute(
-  _mode: string,
   start: string,
   end: string,
+  routeType: "shortest" | "min_interchange" = "shortest",
 ): Promise<RouteResponse> {
-  const url = `${API_BASE}/route?start=${encodeURIComponent(
-    start,
-  )}&end=${encodeURIComponent(end)}`;
+  const url = `${API_BASE}/route?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&route_type=${routeType}`;
   const res = await fetch(url);
   return asJson<RouteResponse>(res);
 }
