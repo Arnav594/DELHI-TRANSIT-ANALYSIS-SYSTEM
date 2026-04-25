@@ -176,21 +176,39 @@ def get_route():
         if not path:
             return jsonify({"error": "No route found"}), 404
 
-        # Remove duplicate station names (interchange display fix)
-        cleaned_path = []
-        previous = None
+        # Build route with line info
+        route_with_lines = []
+        prev_line = None
 
-        for station in path:
-            name = clean_station_name(station)
-            if name != previous:
-                cleaned_path.append(name)
-            previous = name
+        for i in range(len(path)):
+            station = path[i]
+            station_name = clean_station_name(station)
+
+            # find line between current and next
+            line = None
+            if i < len(path) - 1:
+                  next_station = path[i + 1]
+                  for neighbor, l in graph.get(station, []):
+                      if neighbor == next_station:
+                         line = l
+                         break
+
+            # fallback for last station
+            if not line:
+                line = prev_line
+
+            route_with_lines.append({
+                  "name": station_name,
+                  "line": line
+            })
+
+            prev_line = line    
 
         return jsonify({
             "start": start_clean,
             "end": end_clean,
-            "route": cleaned_path,
-            "stops": len(cleaned_path) - 1,
+            "route": route_with_lines,
+            "stops": len(route_with_lines) - 1,
             "interchanges": interchanges,
             "approx_time_minutes": total_time
         })
