@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from db import get_connection
+from bus_router import get_bus_stops, find_bus_route, fuzzy_match
 from collections import defaultdict
 import heapq
 import os
@@ -11,25 +12,26 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-STATION_TIME = 2
-INTERCHANGE_TIME = 7
+STATION_TIME  = 2   # minutes per metro stop
+INTERCHANGE_TIME = 7   # penalty for metro line change
 
+# ── Cache metro graph at startup ──────────────────────────────────────────────
+_metro_graph = None
+_metro_rows  = None
 
-def clean(name: str) -> str:
-    return name.split("[")[0].strip()
-
-
-def build_graph():
+def get_metro_graph():
+    global _metro_graph, _metro_rows
+    if _metro_graph is not None:
+        return _metro_graph, _metro_rows
     conn = get_connection()
-    cur = conn.cursor()
+    cur  = conn.cursor()
     cur.execute("""
         SELECT station_id, station_name, metro_line
         FROM delhi_metro_stations
         ORDER BY metro_line, station_id;
     """)
     rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
 
     graph: dict[str, list] = {}
 
@@ -51,7 +53,15 @@ def build_graph():
                     graph.setdefault(group[i], []).append((group[j], "INTERCHANGE"))
                     graph.setdefault(group[j], []).append((group[i], "INTERCHANGE"))
 
+    _metro_graph = graph
+    _metro_rows  = rows
     return graph, rows
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def clean(name: str) -> str:
+    return name.split("[")[0].strip()
 
 
 def resolve_nodes(graph, clean_name: str) -> list[str]:
@@ -59,7 +69,6 @@ def resolve_nodes(graph, clean_name: str) -> list[str]:
 
 
 def get_line_for_node(rows, node_name: str) -> str:
-    """Get the metro line for a raw node name from DB rows."""
     for _, name, line in rows:
         if name == node_name:
             return line
@@ -67,120 +76,81 @@ def get_line_for_node(rows, node_name: str) -> str:
 
 
 def build_route_details(path: list[str], graph, rows) -> list[dict]:
-    """
-    Build per-station detail list with correct line info.
-    For interchange stations (empty line), carry forward the previous line
-    until a real line is found — this ensures no empty lines in output.
-    """
     details = []
-
     for i, station in enumerate(path):
-        # Find the best line for this station:
-        # 1. Try to get it from the edge COMING INTO this station
-        # 2. Try to get it from the edge GOING OUT of this station
-        # 3. Fall back to DB lookup
-
         line = ""
-
-        # From incoming edge (previous → current)
         if i > 0:
             prev = path[i - 1]
             for nb, l in graph.get(prev, []):
                 if nb == station and l != "INTERCHANGE":
-                    line = l
-                    break
-
-        # From outgoing edge (current → next)
+                    line = l; break
         if not line and i < len(path) - 1:
             nxt = path[i + 1]
             for nb, l in graph.get(station, []):
                 if nb == nxt and l != "INTERCHANGE":
-                    line = l
-                    break
-
-        # DB fallback
+                    line = l; break
         if not line:
             line = get_line_for_node(rows, station)
-
-        # Last resort: carry forward from previous station
         if not line and details:
             line = details[-1]["line"]
 
-        # Determine if this is an interchange point
-        is_ic = False
-        if details and line and details[-1]["line"] and line != details[-1]["line"]:
-            is_ic = True
-
-        details.append({
-            "name": clean(station),
-            "line": line,
-            "is_interchange": is_ic,
-        })
-
+        is_ic = bool(details and line and details[-1]["line"] and line != details[-1]["line"])
+        details.append({"name": clean(station), "line": line, "is_interchange": is_ic})
     return details
 
 
-def dijkstra_shortest(graph, start_clean: str, end_clean: str):
+# ── Metro routing ─────────────────────────────────────────────────────────────
+
+def dijkstra_shortest(graph, start_clean, end_clean):
     starts = resolve_nodes(graph, start_clean)
     ends   = set(resolve_nodes(graph, end_clean))
     if not starts or not ends:
         return None, None, None
-
     pq = [(0, n, None, [n], 0) for n in starts]
     heapq.heapify(pq)
-    visited: dict[tuple, int] = {}
-
+    visited: dict = {}
     while pq:
         time, cur, prev_line, path, ics = heapq.heappop(pq)
         state = (cur, prev_line)
         if state in visited and visited[state] <= time:
             continue
         visited[state] = time
-
         if cur in ends:
             return path, time, ics
-
         for nb, line in graph.get(cur, []):
             add_time = STATION_TIME
             add_ic   = 0
             if prev_line and prev_line != line and line != "INTERCHANGE":
-                add_time += INTERCHANGE_TIME
-                add_ic    = 1
+                add_time += INTERCHANGE_TIME; add_ic = 1
             heapq.heappush(pq, (time + add_time, nb, line, path + [nb], ics + add_ic))
-
     return None, None, None
 
 
-def dijkstra_min_interchange(graph, start_clean: str, end_clean: str):
+def dijkstra_min_interchange(graph, start_clean, end_clean):
     starts = resolve_nodes(graph, start_clean)
     ends   = set(resolve_nodes(graph, end_clean))
     if not starts or not ends:
         return None, None, None
-
     pq = [(0, 0, n, None, [n]) for n in starts]
     heapq.heapify(pq)
-    visited: set[tuple] = set()
-
+    visited: set = set()
     while pq:
         ics, time, cur, prev_line, path = heapq.heappop(pq)
         state = (cur, prev_line)
         if state in visited:
             continue
         visited.add(state)
-
         if cur in ends:
             return path, time, ics
-
         for nb, line in graph.get(cur, []):
-            add_time = STATION_TIME
-            add_ic   = 0
+            add_time = STATION_TIME; add_ic = 0
             if prev_line and prev_line != line and line != "INTERCHANGE":
-                add_time += INTERCHANGE_TIME
-                add_ic    = 1
+                add_time += INTERCHANGE_TIME; add_ic = 1
             heapq.heappush(pq, (ics + add_ic, time + add_time, nb, line, path + [nb]))
-
     return None, None, None
 
+
+# ── API — Metro ───────────────────────────────────────────────────────────────
 
 @app.get("/stations")
 def get_stations():
@@ -208,7 +178,7 @@ def get_route():
         return jsonify({"error": "Start and destination must be different"}), 400
 
     try:
-        graph, rows = build_graph()
+        graph, rows = get_metro_graph()
 
         if route_type == "min_interchange":
             path, total_time, interchanges = dijkstra_min_interchange(graph, clean(start), clean(end))
@@ -218,7 +188,6 @@ def get_route():
         if not path:
             return jsonify({"error": "No route found between these stations"}), 404
 
-        # Deduplicate consecutive same-cleaned-name hops
         deduped: list[str] = []
         prev_clean = None
         for station in path:
@@ -238,11 +207,66 @@ def get_route():
             "approx_time_minutes": total_time,
             "route_type":          route_type,
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+
+# ── API — Bus ─────────────────────────────────────────────────────────────────
+
+@app.get("/bus/stops")
+def bus_stops():
+    """
+    GET /bus/stops?q=kashmere
+    Returns matching bus stop names (fuzzy substring match).
+    Without ?q returns first 100 stops.
+    """
+    try:
+        query = request.args.get("q", "").strip()
+        stops = get_bus_stops()
+        if query:
+            results = fuzzy_match(query, stops, limit=30)
+        else:
+            results = stops[:100]
+        return jsonify({"stops": results, "total": len(stops)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/bus/route")
+def bus_route():
+    """
+    GET /bus/route?start=X&end=Y&mode=shortest
+    mode: shortest | min_interchange
+    """
+    start = request.args.get("start", "").strip()
+    end   = request.args.get("end",   "").strip()
+    mode  = request.args.get("mode",  "shortest")
+
+    if not start or not end:
+        return jsonify({"error": "start and end are required"}), 400
+
+    try:
+        result = find_bus_route(start, end, mode)
+        if "error" in result:
+            return jsonify(result), 404
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
+    # Pre-build both graphs at startup
+    try:
+        get_metro_graph()
+        print("✅ Metro graph loaded")
+    except Exception as e:
+        print(f"⚠️  Metro graph error: {e}")
+
+    try:
+        get_bus_stops()
+        print("✅ Bus graph loaded")
+    except Exception as e:
+        print(f"⚠️  Bus graph error: {e}")
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
