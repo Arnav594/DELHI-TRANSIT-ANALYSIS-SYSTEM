@@ -1,4 +1,5 @@
 import { Clock, MapPinned, TrainFront, Sparkles, RefreshCw, Zap, ArrowRight } from "lucide-react";
+import { RouteResultsSkeleton, SkeletonStyleInjector } from "./Skeleton";
 import type { RouteResponse, RouteStation } from "@/lib/transit-api";
 
 // ── Delhi Metro official line colours ────────────────────────────────────────
@@ -47,17 +48,10 @@ function EmptyState() {
 
 function LoadingState() {
   return (
-    <div className="relative h-full min-h-[420px] rounded-3xl border border-border/80 bg-gradient-card p-8 grid place-items-center overflow-hidden">
-      <div className="absolute inset-0 grid-bg opacity-20" />
-      <div className="relative flex flex-col items-center gap-5">
-        <div className="relative h-16 w-16">
-          <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
-          <div className="absolute inset-3 rounded-full border border-accent/30 border-b-accent animate-spin [animation-direction:reverse] [animation-duration:1.4s]" />
-        </div>
-        <p className="text-sm text-muted-foreground font-mono tracking-wide">Routing through the network…</p>
-      </div>
-    </div>
+    <>
+      <SkeletonStyleInjector />
+      <RouteResultsSkeleton />
+    </>
   );
 }
 

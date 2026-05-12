@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { StationComboboxSkeleton } from "./Skeleton";
 
 interface StationComboboxProps {
   value: string;
@@ -30,6 +31,11 @@ export function StationCombobox({
   accentClass = "text-primary",
 }: StationComboboxProps) {
   const [open, setOpen] = useState(false);
+
+  // Show skeleton while stations are loading
+  if (loading) {
+    return <StationComboboxSkeleton />;
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -57,9 +63,7 @@ export function StationCombobox({
         <Command className="bg-transparent">
           <CommandInput placeholder="Search station..." className="h-11" />
           <CommandList>
-            <CommandEmpty>
-              {loading ? "Loading stations…" : "No station found."}
-            </CommandEmpty>
+            <CommandEmpty>No station found.</CommandEmpty>
             <CommandGroup>
               {stations.map((station) => (
                 <CommandItem
